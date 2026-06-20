@@ -18,7 +18,7 @@ defmodule PaveDBClient.MixProject do
 
   def application do
     [
-      extra_applications: [:logger]
+      extra_applications: [:inets, :logger]
     ]
   end
 
