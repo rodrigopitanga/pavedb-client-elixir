@@ -1,0 +1,15 @@
+# (C) 2026 Rodrigo Rodrigues da Silva <rodrigo@flowlexi.com>
+# SPDX-License-Identifier: Apache-2.0
+
+stages:
+  - test
+
+elixir:
+  image: elixir:1.17-alpine
+  stage: test
+  before_script:
+    - mix local.hex --force
+  script:
+    - mix deps.get
+    - mix compile --warnings-as-errors
+    - mix test
