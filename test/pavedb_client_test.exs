@@ -31,6 +31,15 @@ defmodule PaveDBClientTest do
             method == :post and String.ends_with?(path, "/search") ->
               {:ok, 200, [], ~s({"ok":true,"matches":[{"id":"r1"}]})}
 
+            method == :get and String.ends_with?(path, "/queries?limit=10") ->
+              {:ok, 200, [], ~s({"ok":true,"queries":[{"query_id":"q1"}]})}
+
+            method == :get and String.ends_with?(path, "/queries/q1") ->
+              {:ok, 200, [], ~s({"ok":true,"query":{"query_id":"q1"}})}
+
+            method == :post and String.ends_with?(path, "/queries/q1/replay") ->
+              {:ok, 200, [], ~s({"ok":true,"original_query_id":"q1","matches":[]})}
+
             method == :get and String.ends_with?(path, "/documents") ->
               {:ok, 200, [], ~s({"ok":true,"documents":[{"docid":"note-1"}]})}
 
@@ -64,6 +73,15 @@ defmodule PaveDBClientTest do
                filters: %{"kind" => "note"},
                include_common: true
              )
+
+    assert {:ok, %{"queries" => [%{"query_id" => "q1"}]}} =
+             PaveDBClient.Collection.list_queries(books, limit: 10)
+
+    assert {:ok, %{"query" => %{"query_id" => "q1"}}} =
+             PaveDBClient.Collection.get_query(books, "q1")
+
+    assert {:ok, %{"original_query_id" => "q1"}} =
+             PaveDBClient.Collection.replay_query(books, "q1")
 
     assert {:ok, [%{"id" => "r1"}]} =
              PaveDBClient.Collection.matches(books, "captain")

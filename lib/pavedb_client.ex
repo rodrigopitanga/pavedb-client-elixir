@@ -184,6 +184,57 @@ defmodule PaveDBClient do
   end
 
   @doc """
+  Lists logged searches for a collection, newest first.
+  """
+  @spec list_queries(Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def list_queries(%Client{} = client, tenant, collection, opts \\ []) do
+    query =
+      opts
+      |> Keyword.take([:limit, :offset])
+      |> URI.encode_query()
+      |> case do
+        "" -> ""
+        value -> "?" <> value
+      end
+
+    Client.request(
+      client,
+      :get,
+      "/collections/#{segment(tenant)}/#{segment(collection)}/queries" <>
+        query
+    )
+  end
+
+  @doc """
+  Fetches one logged search, including its original result ids.
+  """
+  @spec get_query(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def get_query(%Client{} = client, tenant, collection, query_id) do
+    Client.request(
+      client,
+      :get,
+      "/collections/#{segment(tenant)}/#{segment(collection)}/queries/" <>
+        segment(query_id)
+    )
+  end
+
+  @doc """
+  Replays one logged search against the collection's current data.
+  """
+  @spec replay_query(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def replay_query(%Client{} = client, tenant, collection, query_id) do
+    Client.request(
+      client,
+      :post,
+      "/collections/#{segment(tenant)}/#{segment(collection)}/queries/" <>
+        segment(query_id) <> "/replay"
+    )
+  end
+
+  @doc """
   Lists documents in a collection.
   """
   @spec list_documents(Client.t(), String.t(), String.t()) ::

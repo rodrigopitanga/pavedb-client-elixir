@@ -60,6 +60,36 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @spec list_queries(t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
+  def list_queries(%__MODULE__{} = collection, opts \\ []) do
+    PaveDBClient.list_queries(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      opts
+    )
+  end
+
+  @spec get_query(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def get_query(%__MODULE__{} = collection, query_id) do
+    PaveDBClient.get_query(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      query_id
+    )
+  end
+
+  @spec replay_query(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def replay_query(%__MODULE__{} = collection, query_id) do
+    PaveDBClient.replay_query(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      query_id
+    )
+  end
+
   @spec matches(t(), String.t(), keyword()) ::
           {:ok, list(map())} | {:error, Error.t()}
   def matches(%__MODULE__{} = collection, q, opts \\ []) do

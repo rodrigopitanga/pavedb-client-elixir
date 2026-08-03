@@ -66,6 +66,22 @@ All request functions return `{:ok, value}` or
 `{:error, %PaveDBClient.Error{}}`. `PaveDBClient.format_error/1` formats
 errors for logs and operator messages.
 
+## Query replay
+
+Collection handles also expose PaveDB's query log:
+
+```elixir
+{:ok, %{"queries" => queries}} =
+  PaveDBClient.Collection.list_queries(books, limit: 20)
+
+query_id = hd(queries)["query_id"]
+{:ok, %{"query" => original}} = PaveDBClient.Collection.get_query(books, query_id)
+{:ok, replay} = PaveDBClient.Collection.replay_query(books, query_id)
+```
+
+See the runnable [concurrent evaluation](examples/1-concurrent-evaluation/)
+and [query replay drift](examples/2-query-replay-drift/) examples.
+
 ## Development
 
 ```bash
