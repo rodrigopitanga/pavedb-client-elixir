@@ -199,6 +199,110 @@ defmodule PaveDBClientTest do
     assert PaveDBClient.format_error(error) == "PaveDB HTTP 404: missing"
   end
 
+  test "target_url routes the /v1 API but sends /health to the server root" do
+    plain = PaveDBClient.new("http://pave.test")
+    versioned = PaveDBClient.new("http://pave.test/v1")
+
+    for client <- [plain, versioned] do
+      assert PaveDBClient.Client.target_url(client, false, "/collections/default") ==
+               "http://pave.test/v1/collections/default"
+
+      assert PaveDBClient.Client.target_url(client, true, "/health") ==
+               "http://pave.test/health"
+    end
+  end
+
+  test "health check hits the root endpoint outside /v1" do
+    parent = self()
+
+    transport = fn method, path, _headers, _body ->
+      send(parent, {:request, method, path})
+      {:ok, 200, [], ~s({"ok":true,"status":"ready","version":"0.9.3"})}
+    end
+
+    for base_url <- ["http://pave.test", "http://pave.test/v1"] do
+      client = PaveDBClient.new(base_url, transport: transport)
+
+      assert {:ok, %{"status" => "ready", "version" => "0.9.3"}} =
+               PaveDBClient.health(client)
+
+      assert_received {:request, :get, "/health"}
+    end
+  end
+
+  test "collection catalog and chunk surface maps to PaveDB HTTP requests" do
+    parent = self()
+
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn method, path, _headers, body ->
+          send(parent, {:request, method, path, body})
+
+          cond do
+            method == :get and path == "/v1/collections/default" ->
+              {:ok, 200, [], ~s({"ok":true,"collections":[{"name":"books"}]})}
+
+            method == :get and String.ends_with?(path, "/books/detail") ->
+              {:ok, 200, [], ~s({"ok":true,"documents":2,"chunks":5})}
+
+            method == :patch and path == "/v1/collections/default/books" ->
+              {:ok, 200, [], ~s({"ok":true,"display_name":"Great Books"})}
+
+            method == :post and String.ends_with?(path, "/books/move") ->
+              {:ok, 200, [], ~s({"ok":true,"new_name":"tomes"})}
+
+            method == :delete and path == "/v1/collections/default/books" ->
+              {:ok, 200, [], ~s({"ok":true,"deleted":true})}
+
+            method == :get and String.ends_with?(path, "/documents/note-1/chunks") ->
+              {:ok, 200, [], ~s({"ok":true,"chunks":[{"rid":"c0"}]})}
+
+            method == :get and String.ends_with?(path, "/chunks/c0/content") ->
+              {:ok, 200, [{"content-type", "text/markdown"}], "raw chunk text"}
+
+            method == :get and String.ends_with?(path, "/chunks/c0") ->
+              {:ok, 200, [], ~s({"ok":true,"rid":"c0","text":"hello"})}
+
+            true ->
+              {:ok, 500, [], ~s({"code":"unexpected","error":"unexpected"})}
+          end
+        end
+      )
+
+    books = PaveDBClient.collection(client, "books")
+
+    assert {:ok, %{"collections" => [%{"name" => "books"}]}} =
+             PaveDBClient.list_collections(client)
+
+    assert {:ok, %{"documents" => 2, "chunks" => 5}} =
+             PaveDBClient.Collection.detail(books)
+
+    assert {:ok, %{"display_name" => "Great Books"}} =
+             PaveDBClient.Collection.update(books, display_name: "Great Books")
+
+    assert_received {:request, :patch, "/v1/collections/default/books", body}
+    assert {:ok, %{"display_name" => "Great Books"}} = PaveDBClient.JSON.decode(body)
+
+    assert {:ok, %PaveDBClient.Collection{name: "tomes"}} =
+             PaveDBClient.Collection.rename(books, "tomes")
+
+    assert_received {:request, :post, "/v1/collections/default/books/move", body}
+    assert {:ok, %{"new_name" => "tomes"}} = PaveDBClient.JSON.decode(body)
+
+    assert {:ok, %{"deleted" => true}} =
+             PaveDBClient.delete_collection(client, "default", "books")
+
+    assert {:ok, %{"chunks" => [%{"rid" => "c0"}]}} =
+             PaveDBClient.Collection.list_chunks(books, "note-1")
+
+    assert {:ok, %{"rid" => "c0", "text" => "hello"}} =
+             PaveDBClient.Collection.get_chunk(books, "c0")
+
+    assert {:ok, %{"content" => "raw chunk text", "content_type" => "text/markdown"}} =
+             PaveDBClient.Collection.get_chunk_content(books, "c0")
+  end
+
   defp unique_id do
     System.unique_integer([:positive, :monotonic])
   end

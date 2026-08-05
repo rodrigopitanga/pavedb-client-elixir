@@ -137,4 +137,66 @@ defmodule PaveDBClient.Collection do
       docid
     )
   end
+
+  @spec detail(t()) :: {:ok, map()} | {:error, Error.t()}
+  def detail(%__MODULE__{} = collection) do
+    PaveDBClient.collection_detail(
+      collection.client,
+      collection.tenant,
+      collection.name
+    )
+  end
+
+  @spec update(t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
+  def update(%__MODULE__{} = collection, opts \\ []) do
+    PaveDBClient.update_collection(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      opts
+    )
+  end
+
+  @spec rename(t(), String.t()) :: {:ok, t()} | {:error, Error.t()}
+  def rename(%__MODULE__{} = collection, new_name) do
+    case PaveDBClient.move_collection(
+           collection.client,
+           collection.tenant,
+           collection.name,
+           new_name
+         ) do
+      {:ok, _response} -> {:ok, %{collection | name: new_name}}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @spec list_chunks(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def list_chunks(%__MODULE__{} = collection, docid) do
+    PaveDBClient.list_chunks(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      docid
+    )
+  end
+
+  @spec get_chunk(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def get_chunk(%__MODULE__{} = collection, rid) do
+    PaveDBClient.get_chunk(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      rid
+    )
+  end
+
+  @spec get_chunk_content(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def get_chunk_content(%__MODULE__{} = collection, rid) do
+    PaveDBClient.get_chunk_content(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      rid
+    )
+  end
 end

@@ -61,10 +61,37 @@ defmodule PaveDBClient.Client do
   def request(%__MODULE__{} = client, method, path, body, opts) do
     headers = headers(client)
     content_type = Keyword.get(opts, :content_type)
+    root = Keyword.get(opts, :root, false)
 
     with {:ok, status, _headers, response_body} <-
-           send_request(client, method, path, headers, content_type, body) do
+           send_request(client, method, root, path, headers, content_type, body) do
       decode(status, response_body)
+    else
+      {:error, %Error{} = error} -> {:error, error}
+      {:error, reason} -> {:error, transport_error(reason)}
+    end
+  end
+
+  @doc """
+  Sends a request and returns the undecoded response body on success.
+
+  Used for endpoints that answer with a raw body (for example chunk content)
+  instead of the usual JSON envelope. Non-2xx responses still decode into a
+  structured `Error`.
+  """
+  @spec request_raw(t(), atom(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def request_raw(%__MODULE__{} = client, method, path, opts \\ []) do
+    headers = headers(client)
+    root = Keyword.get(opts, :root, false)
+
+    with {:ok, status, response_headers, response_body} <-
+           send_request(client, method, root, path, headers, nil, "") do
+      if status in 200..299 do
+        {:ok, %{status: status, headers: response_headers, body: response_body}}
+      else
+        decode(status, response_body)
+      end
     else
       {:error, %Error{} = error} -> {:error, error}
       {:error, reason} -> {:error, transport_error(reason)}
@@ -74,19 +101,20 @@ defmodule PaveDBClient.Client do
   defp send_request(
          %{transport: transport} = client,
          method,
+         root,
          path,
          headers,
          _type,
          body
        )
        when is_function(transport, 4) do
-    transport.(method, prefix(client) <> path, headers, IO.iodata_to_binary(body))
+    transport.(method, path_prefix(client, root) <> path, headers, IO.iodata_to_binary(body))
   end
 
-  defp send_request(client, method, path, headers, content_type, body) do
+  defp send_request(client, method, root, path, headers, content_type, body) do
     {:ok, _apps} = Application.ensure_all_started(:inets)
 
-    url = String.to_charlist(client.base_url <> prefix(client) <> path)
+    url = String.to_charlist(target_url(client, root, path))
 
     http_headers =
       Enum.map(headers, fn {key, value} ->
@@ -188,6 +216,20 @@ defmodule PaveDBClient.Client do
   defp prefix(%{base_url: base_url}) do
     if String.ends_with?(base_url, "/v1"), do: "", else: "/v1"
   end
+
+  @doc false
+  @spec target_url(t(), boolean(), String.t()) :: String.t()
+  def target_url(%__MODULE__{} = client, root, path) do
+    base_url(client, root) <> path_prefix(client, root) <> path
+  end
+
+  # Root-scoped requests (for example `/health`) target the server origin,
+  # so any `/v1` carried in the configured base URL is dropped as well.
+  defp base_url(%{base_url: base_url}, true), do: String.replace_suffix(base_url, "/v1", "")
+  defp base_url(%{base_url: base_url}, false), do: base_url
+
+  defp path_prefix(_client, true), do: ""
+  defp path_prefix(client, false), do: prefix(client)
 
   defp blank_to_nil(nil), do: nil
   defp blank_to_nil(""), do: nil

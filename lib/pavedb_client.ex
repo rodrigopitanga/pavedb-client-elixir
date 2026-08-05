@@ -289,6 +289,140 @@ defmodule PaveDBClient do
   end
 
   @doc """
+  Checks server health through the root `/health` endpoint.
+
+  `/health` lives outside the `/v1` API and needs no auth, so it doubles as a
+  basic connection check. Returns the readiness envelope (`status`, `version`).
+  """
+  @spec health(Client.t()) :: {:ok, map()} | {:error, Error.t()}
+  def health(%Client{} = client) do
+    Client.request(client, :get, "/health", root: true)
+  end
+
+  @doc """
+  Lists a tenant's collections.
+  """
+  @spec list_collections(Client.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def list_collections(%Client{} = client, opts \\ []) do
+    tenant = Keyword.get(opts, :tenant, client.tenant)
+    Client.request(client, :get, "/collections/#{segment(tenant)}")
+  end
+
+  @doc """
+  Fetches a collection's settings plus document and chunk counts.
+  """
+  @spec collection_detail(Client.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def collection_detail(%Client{} = client, tenant, name) do
+    Client.request(
+      client,
+      :get,
+      "/collections/#{segment(tenant)}/#{segment(name)}/detail"
+    )
+  end
+
+  @doc """
+  Updates a collection's editable metadata (currently `display_name`).
+  """
+  @spec update_collection(Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def update_collection(%Client{} = client, tenant, name, opts \\ []) do
+    body =
+      %{"display_name" => Keyword.get(opts, :display_name)}
+      |> strip_nil()
+
+    Client.request_json(
+      client,
+      :patch,
+      "/collections/#{segment(tenant)}/#{segment(name)}",
+      body
+    )
+  end
+
+  @doc """
+  Renames a collection, changing its slug and URL.
+  """
+  @spec move_collection(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def move_collection(%Client{} = client, tenant, name, new_name) do
+    Client.request_json(
+      client,
+      :post,
+      "/collections/#{segment(tenant)}/#{segment(name)}/move",
+      %{"new_name" => new_name}
+    )
+  end
+
+  @doc """
+  Deletes a collection and every document in it.
+  """
+  @spec delete_collection(Client.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def delete_collection(%Client{} = client, tenant, name) do
+    Client.request(
+      client,
+      :delete,
+      "/collections/#{segment(tenant)}/#{segment(name)}"
+    )
+  end
+
+  @doc """
+  Lists the chunks a document was split into.
+  """
+  @spec list_chunks(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def list_chunks(%Client{} = client, tenant, collection, docid) do
+    Client.request(
+      client,
+      :get,
+      "/collections/#{segment(tenant)}/#{segment(collection)}/documents/" <>
+        segment(docid) <> "/chunks"
+    )
+  end
+
+  @doc """
+  Fetches one chunk by its record id.
+  """
+  @spec get_chunk(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def get_chunk(%Client{} = client, tenant, collection, rid) do
+    Client.request(
+      client,
+      :get,
+      "/collections/#{segment(tenant)}/#{segment(collection)}/chunks/" <>
+        segment(rid)
+    )
+  end
+
+  @doc """
+  Fetches one chunk's raw text content.
+
+  Returns `%{"content" => body, "content_type" => type}`; the endpoint answers
+  with the raw body rather than a JSON envelope.
+  """
+  @spec get_chunk_content(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def get_chunk_content(%Client{} = client, tenant, collection, rid) do
+    case Client.request_raw(
+           client,
+           :get,
+           "/collections/#{segment(tenant)}/#{segment(collection)}/chunks/" <>
+             segment(rid) <> "/content"
+         ) do
+      {:ok, %{body: body, headers: headers}} ->
+        {:ok,
+         %{
+           "content" => body,
+           "content_type" => response_content_type(headers)
+         }}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
   Formats a structured client error for logs or operator messages.
   """
   @spec format_error(Error.t() | term()) :: String.t()
@@ -304,6 +438,12 @@ defmodule PaveDBClient do
   @doc false
   def strip_nil(map) do
     Map.reject(map, fn {_key, value} -> is_nil(value) end)
+  end
+
+  defp response_content_type(headers) do
+    Enum.find_value(headers, "text/plain", fn {key, value} ->
+      if String.downcase(to_string(key)) == "content-type", do: to_string(value)
+    end)
   end
 
   defp collection_attr_keys do

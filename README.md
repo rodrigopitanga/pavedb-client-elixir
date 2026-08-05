@@ -82,6 +82,29 @@ query_id = hd(queries)["query_id"]
 See the runnable [concurrent evaluation](examples/1-concurrent-evaluation/)
 and [query replay drift](examples/2-query-replay-drift/) examples.
 
+## Managing collections
+
+The client mirrors PaveDB's user-facing `/v1` catalog and chunk surface, plus a
+root `/health` connection check:
+
+```elixir
+{:ok, %{"status" => "ready"}} = PaveDBClient.health(client)
+
+{:ok, %{"collections" => collections}} = PaveDBClient.list_collections(client)
+
+{:ok, detail} = PaveDBClient.Collection.detail(books)
+{:ok, _} = PaveDBClient.Collection.update(books, display_name: "Great Books")
+{:ok, tomes} = PaveDBClient.Collection.rename(books, "tomes")
+
+{:ok, %{"chunks" => chunks}} = PaveDBClient.Collection.list_chunks(tomes, "note-1")
+{:ok, chunk} = PaveDBClient.Collection.get_chunk(tomes, hd(chunks)["rid"])
+{:ok, %{"content" => text}} = PaveDBClient.Collection.get_chunk_content(tomes, chunk["rid"])
+
+{:ok, _} = PaveDBClient.delete_collection(client, "tenant", "tomes")
+```
+
+`/admin`, `/metrics`, and `/embedders` are intentionally out of scope.
+
 ## Development
 
 ```bash
