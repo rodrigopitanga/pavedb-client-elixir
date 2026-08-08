@@ -8,10 +8,9 @@ at PaveDB 1.0 and is additive afterward. Keep this roadmap lightweight and
 honest: list only what's planned, mark dependencies, and do not invent module
 or function names ahead of implementation.
 
-## Completed
+## PaveDB 1.0
 
-- **P1-66 — Numbered `examples/` tree.** Runnable concurrent-evaluation and
-  query-replay-drift examples live under `examples/<n>-<slug>/` and are tested
-  against a real PaveDB.
-- **Query log + replay support.** The client and collection surfaces list,
-  fetch, and replay stored queries.
+- **P1-67 — Public API parity.** Track the current user-facing `/v1` surface
+  plus a basic `/health` connection check. `/admin`, `/metrics`, and
+  `/embedders` stay out of scope. Prove parity against a real PaveDB without a
+  generated client or new dependency.
