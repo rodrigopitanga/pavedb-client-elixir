@@ -7,10 +7,14 @@ DOCS_DIR := docs/reference
 DIST_DIR := dist
 TARBALL := $(DIST_DIR)/$(APP)-$(VERSION).tar
 
-.PHONY: docs release-tarball release-tarball-check
+.PHONY: docs release-tag-check release-tarball release-tarball-check
 
 docs:
 	mix docs --formatter markdown --output $(DOCS_DIR)
+
+release-tag-check:
+	test -n "$(CI_COMMIT_TAG)"
+	test "$(CI_COMMIT_TAG)" = "v$(VERSION)"
 
 release-tarball: docs
 	mkdir -p $(DIST_DIR)
