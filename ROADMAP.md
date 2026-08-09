@@ -11,5 +11,6 @@ or function names ahead of implementation.
 ## PaveDB 1.0
 
 - P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
-  Hex tarball: a final `v<version>` tag must match `mix.exs`, pass the tarball
-  check, and publish with protected `HEX_API_KEY`.
+  Hex tarball: GNU Make/Bash admission and guarded `hex-publish`; a final
+  `v<version>` tag must match `mix.exs`, pass the tarball check, and publish
+  with protected `HEX_API_KEY`.
