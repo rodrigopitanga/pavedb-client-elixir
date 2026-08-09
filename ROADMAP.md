@@ -7,8 +7,3 @@ Early-stage HTTP client targeting PaveDB's `/v1` REST contract, which freezes
 at PaveDB 1.0 and is additive afterward. Keep this roadmap lightweight and
 honest: list only what's planned, mark dependencies, and do not invent module
 or function names ahead of implementation.
-
-## PaveDB 1.0
-
-- **P1-69 — Elixir release docs.** Build a Hex tarball with ExDoc Markdown API
-  docs for pavedb-site.
