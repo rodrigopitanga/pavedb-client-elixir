@@ -23,11 +23,14 @@ defmodule PaveDBClient.MixProject do
   end
 
   defp deps do
-    []
+    [
+      {:ex_doc, "~> 0.40", only: :dev, runtime: false}
+    ]
   end
 
   defp package do
     [
+      files: ["lib", "docs/reference", "mix.exs", "README.md", "LICENSE", "Makefile"],
       licenses: ["Apache-2.0"],
       links: %{"GitLab" => "https://gitlab.com/flowlexi/pavedb-elixir-client"}
     ]
