@@ -30,7 +30,14 @@ defmodule PaveDBClient.MixProject do
 
   defp package do
     [
-      files: ["lib", "docs/reference", "mix.exs", "README.md", "LICENSE", "Makefile"],
+      files: [
+        "lib",
+        "docs/reference",
+        "mix.exs",
+        "README.md",
+        "LICENSE",
+        "Makefile"
+      ],
       licenses: ["Apache-2.0"],
       links: %{"GitLab" => "https://gitlab.com/flowlexi/pavedb-elixir-client"}
     ]
