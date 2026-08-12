@@ -5,11 +5,11 @@
 
 Elixir client package for PaveDB.
 
-## Shape
+## Scope
 
-- Connect to a running PaveDB HTTP server.
-- Keep the PaveDB server repository as the OpenAPI contract source.
-- Keep local embedded PaveDB runtime concerns out of this client.
+- Connects to a running PaveDB HTTP server.
+- The PaveDB core repository defines the OpenAPI contract.
+- Embedded PaveDB runtime support is outside this client's scope.
 
 ## Basic Usage
 
