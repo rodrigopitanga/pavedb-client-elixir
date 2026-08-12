@@ -138,6 +138,9 @@ root `/health` connection check:
 
 ## Development
 
+Needs Elixir 1.17 or later on OTP 27 or later: the client encodes and decodes
+with OTP's built-in `:json` and takes no runtime dependency of its own.
+
 ```bash
 mix deps.get
 mix compile --warnings-as-errors

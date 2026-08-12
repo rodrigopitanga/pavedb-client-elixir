@@ -4,11 +4,22 @@
 defmodule PaveDBClient.MixProject do
   use Mix.Project
 
+  # The client encodes and decodes with OTP's built-in :json, which arrived in
+  # OTP 27. Elixir 1.17 is the first release that runs on it.
+  @otp_required 27
+
+  if String.to_integer(System.otp_release()) < @otp_required do
+    Mix.raise(
+      "pavedb_client needs OTP #{@otp_required} or later for the :json module, " <>
+        "found OTP #{System.otp_release()}"
+    )
+  end
+
   def project do
     [
       app: :pavedb_client,
       version: "0.1.0",
-      elixir: "~> 1.15",
+      elixir: "~> 1.17",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       description: "Elixir client for PaveDB",
