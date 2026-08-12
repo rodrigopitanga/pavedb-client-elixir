@@ -43,11 +43,16 @@ defmodule PaveDBExamples.QueryReplayDrift do
     original_ids = get_in(original, ["query", "result_ids"])
     replayed_ids = Enum.map(replay["matches"], & &1["id"])
 
-    %{query_id: query_id, drifted: original_ids != replayed_ids,
-      original_ids: original_ids, replayed_ids: replayed_ids}
+    %{
+      query_id: query_id,
+      drifted: original_ids != replayed_ids,
+      original_ids: original_ids,
+      replayed_ids: replayed_ids
+    }
   end
 
   defp task_result({:ok, result}), do: result
+
   defp task_result({:exit, reason}) do
     %{query_id: nil, drifted: true, error: inspect(reason)}
   end

@@ -31,10 +31,12 @@ defmodule PaveDBExamples.ConcurrentEvaluation do
       {"Represent positive integers in binary notation.", "KS3-CS-04"}
     ]
     |> Enum.each(fn {text, code} ->
-      result!(PaveDBClient.Collection.add(collection, text,
-        docid: code,
-        metadata: %{"code" => code}
-      ))
+      result!(
+        PaveDBClient.Collection.add(collection, text,
+          docid: code,
+          metadata: %{"code" => code}
+        )
+      )
     end)
 
     collection
@@ -48,6 +50,7 @@ defmodule PaveDBExamples.ConcurrentEvaluation do
               code = get_in(match, ["meta", "code"]),
               code,
               do: code
+
         {:ok, %{query: query, recall: recall(codes, expected_codes)}}
 
       {:error, error} ->
@@ -91,8 +94,11 @@ defmodule PaveDBExamples.ConcurrentEvaluation do
   defp fold({:exit, reason}, acc), do: %{acc | failed: [%{reason: reason} | acc.failed]}
 
   defp finalize(%{ok: ok, recall_sum: sum, failed: failed}) do
-    %{queries_ok: ok, mean_recall: if(ok == 0, do: 0.0, else: Float.round(sum / ok, 3)),
-      failed: Enum.reverse(failed)}
+    %{
+      queries_ok: ok,
+      mean_recall: if(ok == 0, do: 0.0, else: Float.round(sum / ok, 3)),
+      failed: Enum.reverse(failed)
+    }
   end
 
   defp result!({:ok, value}), do: value

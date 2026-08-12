@@ -50,6 +50,7 @@ elixir:
     - mix local.hex --force
   script:
     - mix deps.get
+    - mix format --check-formatted
     - mix compile --warnings-as-errors
     - mix test
     - make release-tarball-check
