@@ -176,27 +176,78 @@ defmodule PaveDBClientTest do
     assert body =~ "id,kind"
   end
 
-  test "maps HTTP error payloads to structured errors" do
+  test "maps PaveDB error envelopes to structured errors" do
+    body =
+      ~s({"ok":false,"code":"collection_not_found",) <>
+        ~s("error":"collection 'missing' not found",) <>
+        ~s("details":{"tenant":"default","collection":"missing"},) <>
+        ~s("request_id":"r-1","latency_ms":1.5})
+
     client =
       PaveDBClient.new(
         "http://pave.test",
-        transport: fn _method, _path, _headers, _body ->
-          body =
-            ~s({"detail":{"code":"collection_not_found",) <>
-              ~s("error":"missing","error_type":"not_found"}})
-
-          {:ok, 404, [], body}
-        end
+        transport: fn _method, _path, _headers, _body -> {:ok, 404, [], body} end
       )
 
     assert {:error, error} =
              PaveDBClient.get_document(client, "default", "missing", "doc")
 
     assert error.code == "collection_not_found"
-    assert error.message == "missing"
+    assert error.message == "collection 'missing' not found"
     assert error.status == 404
-    assert error.type == "not_found"
-    assert PaveDBClient.format_error(error) == "PaveDB HTTP 404: missing"
+    assert error.details == %{"tenant" => "default", "collection" => "missing"}
+
+    assert PaveDBClient.format_error(error) ==
+             "PaveDB HTTP 404: collection 'missing' not found"
+  end
+
+  test "keeps the status when a failure carries no PaveDB envelope" do
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn _method, _path, _headers, _body ->
+          {:ok, 502, [], "<html>bad gateway</html>"}
+        end
+      )
+
+    assert {:error, error} = PaveDBClient.health(client)
+    assert error.code == "http_502"
+    assert error.message == "<html>bad gateway</html>"
+    assert error.status == 502
+    assert error.details == nil
+  end
+
+  test "reports transport failures without a status" do
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn _method, _path, _headers, _body -> {:error, :timeout} end
+      )
+
+    assert {:error, error} = PaveDBClient.health(client)
+    assert error.code == "request_failed"
+    assert error.status == nil
+    assert error.message =~ ":timeout"
+    assert PaveDBClient.format_error(error) == error.message
+  end
+
+  test "a degraded /health stays a successful response" do
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn _method, _path, _headers, _body ->
+          {:ok, 200, [], ~s({"ok":false,"status":"degraded","version":"0.9.3"})}
+        end
+      )
+
+    assert {:ok, %{"status" => "degraded"}} = PaveDBClient.health(client)
+  end
+
+  test "requests are bounded by a default timeout that callers can override" do
+    assert %{timeout: 30_000, connect_timeout: 5_000} = PaveDBClient.connect()
+
+    assert %{timeout: 1_000, connect_timeout: 250} =
+             PaveDBClient.connect(timeout: 1_000, connect_timeout: 250)
   end
 
   test "target_url routes the /v1 API but sends /health to the server root" do

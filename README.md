@@ -38,6 +38,13 @@ matches = response["matches"]
 The collection handle uses the tenant stored on the client. When `tenant:` is
 omitted, the client uses PaveDB's `default` tenant.
 
+Requests time out after 30 seconds, with 5 seconds to connect. Both are
+per-client options:
+
+```elixir
+PaveDBClient.connect(timeout: 120_000, connect_timeout: 2_000)
+```
+
 Lower-level helpers are also available when a provider already has tenant and
 collection values:
 

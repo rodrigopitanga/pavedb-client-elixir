@@ -18,7 +18,7 @@ defmodule PaveDBClient.MixProject do
 
   def application do
     [
-      extra_applications: [:inets, :logger, :public_key]
+      extra_applications: [:inets, :logger, :ssl]
     ]
   end
 
@@ -39,7 +39,7 @@ defmodule PaveDBClient.MixProject do
         "Makefile"
       ],
       licenses: ["Apache-2.0"],
-      links: %{"GitLab" => "https://gitlab.com/flowlexi/pavedb-elixir-client"}
+      links: %{"GitLab" => "https://gitlab.com/flowlexi/pavedb-client-elixir"}
     ]
   end
 end

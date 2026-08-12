@@ -8,19 +8,33 @@ defmodule PaveDBClient.Client do
 
   alias PaveDBClient.Error
 
+  @default_timeout 30_000
+  @default_connect_timeout 5_000
+
   defstruct base_url: nil,
             tenant: "default",
             token: nil,
             headers: [],
-            transport: nil
+            transport: nil,
+            timeout: @default_timeout,
+            connect_timeout: @default_connect_timeout
 
   @type t :: %__MODULE__{
           base_url: String.t(),
           tenant: String.t(),
           token: String.t() | nil,
           headers: [{String.t(), String.t()}],
-          transport: function() | nil
+          transport: transport() | nil,
+          timeout: timeout(),
+          connect_timeout: timeout()
         }
+
+  @typedoc """
+  Replacement HTTP sender, called as `transport.(method, path, headers, body)`.
+  """
+  @type transport ::
+          (atom(), String.t(), [{String.t(), String.t()}], binary() ->
+             {:ok, non_neg_integer(), list(), binary()} | {:error, term()})
 
   @spec new(String.t(), keyword()) :: t()
   def new(base_url, opts \\ []) do
@@ -34,7 +48,9 @@ defmodule PaveDBClient.Client do
       tenant: Keyword.get(opts, :tenant, "default"),
       token: blank_to_nil(token),
       headers: Keyword.get(opts, :headers, []),
-      transport: Keyword.get(opts, :transport)
+      transport: Keyword.get(opts, :transport),
+      timeout: Keyword.get(opts, :timeout, @default_timeout),
+      connect_timeout: Keyword.get(opts, :connect_timeout, @default_connect_timeout)
     }
   end
 
@@ -112,7 +128,9 @@ defmodule PaveDBClient.Client do
   end
 
   defp send_request(client, method, root, path, headers, content_type, body) do
-    {:ok, _apps} = Application.ensure_all_started(:inets)
+    # :ssl is not a dependency of :inets, so https URLs fail with
+    # :ssl_not_started unless it is running before the first request.
+    {:ok, _apps} = Application.ensure_all_started([:inets, :ssl])
 
     url = String.to_charlist(target_url(client, root, path))
 
@@ -136,7 +154,12 @@ defmodule PaveDBClient.Client do
           {url, http_headers, to_charlist(type), body}
       end
 
-    case :httpc.request(method, request, [], body_format: :binary) do
+    http_options = [
+      timeout: client.timeout,
+      connect_timeout: client.connect_timeout
+    ]
+
+    case :httpc.request(method, request, http_options, body_format: :binary) do
       {:ok, {{_version, status, _reason}, response_headers, response_body}} ->
         {:ok, status, response_headers, response_body}
 
@@ -149,19 +172,21 @@ defmodule PaveDBClient.Client do
     decode_success(body)
   end
 
+  # PaveDB answers every failure with {ok, code, error, details?} plus the
+  # trace fields. Bodies that miss it (proxies, non-JSON) keep the status.
   defp decode(status, body) do
     payload =
       case PaveDBClient.JSON.decode(body) do
-        {:ok, %{} = data} -> normalize_error_payload(data)
+        {:ok, %{"code" => _code} = data} -> data
         _other -> %{"code" => "http_#{status}", "error" => body}
       end
 
     {:error,
      %Error{
-       code: to_string(payload["code"] || "pavedb_error"),
-       message: to_string(payload["error"] || payload["message"] || "PaveDB error"),
+       code: to_string(payload["code"]),
+       message: to_string(payload["error"] || "PaveDB error"),
        status: status,
-       type: payload["error_type"],
+       details: payload["details"],
        body: payload
      }}
   end
@@ -170,12 +195,10 @@ defmodule PaveDBClient.Client do
 
   defp decode_success(body) do
     case PaveDBClient.JSON.decode(body) do
+      # The HTTP status decides success, so `ok` carries nothing extra. On
+      # `/health` it can be false on a 200 while `status` says "degraded".
       {:ok, %{} = data} ->
-        if data["ok"] == false do
-          decode(500, body)
-        else
-          {:ok, Map.delete(data, "ok")}
-        end
+        {:ok, Map.delete(data, "ok")}
 
       {:ok, _other} ->
         {:error,
@@ -194,9 +217,6 @@ defmodule PaveDBClient.Client do
          }}
     end
   end
-
-  defp normalize_error_payload(%{"detail" => %{} = detail}), do: detail
-  defp normalize_error_payload(payload), do: payload
 
   defp transport_error(reason) do
     %Error{
