@@ -10,9 +10,6 @@ or function names ahead of implementation.
 
 ## PaveDB 1.0
 
-- P1-67 — Reach the shared-scope `GET`/`POST /v1/search` endpoints. The
-  catalog, document, chunk, query-log, raw-vector, and `/health` surfaces have
-  landed; this is the remaining user-facing `/v1` operation.
 - P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
   Hex tarball: GNU Make/Bash admission and guarded `hex-publish`; a final
   `v<version>` tag must match `mix.exs`, pass the tarball check, and publish
