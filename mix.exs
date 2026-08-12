@@ -43,9 +43,11 @@ defmodule PaveDBClient.MixProject do
     [
       files: [
         "lib",
+        "scripts",
         "docs/reference",
         "mix.exs",
         "README.md",
+        "CHANGELOG.md",
         "LICENSE",
         "Makefile"
       ],
