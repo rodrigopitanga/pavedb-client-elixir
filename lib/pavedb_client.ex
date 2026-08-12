@@ -195,6 +195,28 @@ defmodule PaveDBClient do
     run_search(client, tenant, collection, %{"v" => vector}, opts)
   end
 
+  @doc """
+  Searches the one collection PaveDB is configured to share across tenants.
+
+  Takes `:k` and `:filters`. The endpoint needs no tenant or collection, and
+  answers with an empty match list when the server has no shared scope
+  enabled. There is no raw-vector form: the server drops `v` on this
+  endpoint, so only text queries reach it.
+  """
+  @spec search_shared(Client.t(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def search_shared(%Client{} = client, q, opts \\ []) do
+    body =
+      %{
+        "q" => q,
+        "k" => Keyword.get(opts, :k, 5),
+        "filters" => Keyword.get(opts, :filters)
+      }
+      |> strip_nil()
+
+    Client.request_json(client, :post, "/search", body)
+  end
+
   defp run_search(client, tenant, collection, query, opts) do
     body =
       query

@@ -280,6 +280,28 @@ defmodule PaveDBClientTest do
     assert item == %{"vector" => [0.3], "docid" => "vec-2"}
   end
 
+  test "shared search hits /v1/search without a tenant or collection" do
+    parent = self()
+
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn method, path, _headers, body ->
+          send(parent, {:request, method, path, body})
+          {:ok, 200, [], ~s({"ok":true,"matches":[{"id":"s1"}],"query_id":null})}
+        end
+      )
+
+    assert {:ok, %{"matches" => [%{"id" => "s1"}]}} =
+             PaveDBClient.search_shared(client, "captain", k: 3, filters: %{"kind" => "note"})
+
+    assert_received {:request, :post, "/v1/search", body}
+
+    assert {:ok, %{"q" => "captain", "k" => 3, "filters" => %{"kind" => "note"}}} =
+             PaveDBClient.JSON.decode(body)
+
+  end
+
   test "requests are bounded by a default timeout that callers can override" do
     assert %{timeout: 30_000, connect_timeout: 5_000} = PaveDBClient.connect()
 

@@ -85,6 +85,18 @@ raw vector on a given document or query, never both:
 
 Batch items carry vectors too: `%{vector: [0.1, 0.2], docid: "vec-2"}`.
 
+## Shared scope
+
+A server can designate one collection as shared across tenants. Searching it
+needs no tenant or collection, and answers with an empty match list when the
+server has no shared scope enabled:
+
+```elixir
+{:ok, %{"matches" => matches}} = PaveDBClient.search_shared(client, "captain", k: 3)
+```
+
+Text only — PaveDB's shared endpoint ignores raw query vectors.
+
 ## Query replay
 
 Collection handles also expose PaveDB's query log:
