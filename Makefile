@@ -38,6 +38,7 @@ MIX             ?= mix
 DOCS_DIR        ?= docs/reference
 DIST_DIR        ?= dist
 CHANGELOG       ?= CHANGELOG.md
+RELEASE_REMOTE  ?= gitlab
 TARBALL         := $(DIST_DIR)/$(APP)-$(VERSION).tar
 
 # -------- help --------
@@ -45,19 +46,38 @@ TARBALL         := $(DIST_DIR)/$(APP)-$(VERSION).tar
 help:
 	@echo "$(APP) $(VERSION)"; \
 	echo; \
+	echo "  test                   Run the checks the CI test job runs"; \
 	echo "  docs                   Generate the markdown API reference"; \
+	echo "  bump                   Set the version in mix.exs (VERSION=x.y.z)"; \
 	echo "  changelog              Preview the $(VERSION) entry (no write)"; \
 	echo "  changelog-write        Prepend the $(VERSION) entry to $(CHANGELOG)"; \
-	echo "  release                Write the changelog and verify the tarball"; \
+	echo "  release                Bump, changelog, check, commit, and tag"; \
 	echo "  release-tarball        Build $(TARBALL)"; \
 	echo "  release-tarball-check  Build the tarball and verify its contents"; \
 	echo "  release-tag-check      Assert CI_COMMIT_TAG matches v$(VERSION)"; \
 	echo "  clean                  Remove generated docs and tarballs"
 
+# -------- test --------
+.PHONY: test
+test:
+	$(MIX) format --check-formatted
+	$(MIX) compile --warnings-as-errors
+	$(MIX) test
+
 # -------- docs --------
 .PHONY: docs
 docs:
 	$(MIX) docs --formatter markdown --output $(DOCS_DIR)
+
+# -------- bump --------
+.PHONY: bump
+bump:
+	@if [ -z "$(VERSION)" ]; then \
+	  echo "Error: VERSION is not set. Usage: make bump VERSION=0.2.0"; \
+	  exit 1; \
+	fi
+	@perl -0pi -e 's/^(\s*version: ")[^"]*(")/$${1}$(VERSION)$${2}/m' mix.exs
+	@echo "Version in mix.exs is now $(VERSION)."
 
 # -------- changelog --------
 .PHONY: changelog
@@ -87,9 +107,33 @@ release-tarball-check: release-tarball
 	test -f $(DIST_DIR)/unpacked/$(DOCS_DIR)/api-reference.md
 
 .PHONY: release
-release: changelog-write release-tarball-check
-	@echo; \
-	echo "Ready. Review $(CHANGELOG), commit it, then tag v$(VERSION) to publish."
+release:
+	@if [ -n "$$(git status --porcelain)" ]; then \
+	  echo "Working tree not clean"; exit 1; \
+	fi
+	@if git rev-parse "v$(VERSION)" >/dev/null 2>&1; then \
+	  echo "Tag v$(VERSION) already exists"; exit 1; \
+	fi
+	@set -eE; \
+	revert_changes() { \
+	  echo "Reverting version bump and changelog..."; \
+	  git checkout -- mix.exs $(CHANGELOG) 2>/dev/null || true; \
+	}; \
+	trap 'status=$$?; if [ "$$status" -ne 0 ]; then revert_changes; fi; exit $$status' ERR; \
+	$(MAKE) bump VERSION=$(VERSION); \
+	$(MAKE) changelog-write VERSION=$(VERSION); \
+	$(MAKE) test VERSION=$(VERSION); \
+	$(MAKE) release-tarball-check VERSION=$(VERSION); \
+	git add mix.exs $(CHANGELOG); \
+	if git diff --cached --quiet; then \
+	  echo "Nothing to commit — release commit already exists."; \
+	else \
+	  git commit -m "chore(release): v$(VERSION)"; \
+	fi; \
+	git tag "v$(VERSION)"; \
+	echo; \
+	echo "Tagged v$(VERSION). Publish with:"; \
+	echo "  git push $(RELEASE_REMOTE) $$(git rev-parse --abbrev-ref HEAD) v$(VERSION)"
 
 # -------- clean --------
 .PHONY: clean
