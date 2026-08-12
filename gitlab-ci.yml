@@ -46,11 +46,13 @@ elixir:
   image: elixir:1.17-alpine
   stage: test
   before_script:
+    - apk add --no-cache make
     - mix local.hex --force
   script:
     - mix deps.get
     - mix compile --warnings-as-errors
     - mix test
+    - make release-tarball-check
 
 docs-tarball:
   image: elixir:1.17-alpine

@@ -12,8 +12,8 @@ TARBALL := $(DIST_DIR)/$(APP)-$(VERSION).tar
 docs:
 	mix docs --formatter markdown --output $(DOCS_DIR)
 
+# Only runs on tag pipelines, which already guarantee CI_COMMIT_TAG is set.
 release-tag-check:
-	test -n "$(CI_COMMIT_TAG)"
 	test "$(CI_COMMIT_TAG)" = "v$(VERSION)"
 
 release-tarball: docs
