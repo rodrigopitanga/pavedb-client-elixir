@@ -36,6 +36,14 @@ defmodule PaveDBClient.Client do
           (atom(), String.t(), [{String.t(), String.t()}], binary() ->
              {:ok, non_neg_integer(), list(), binary()} | {:error, term()})
 
+  @doc """
+  Builds a client struct. Prefer `PaveDBClient.connect/2`, which fills the
+  base URL in from `PAVEDB_URL`.
+
+  Takes `:tenant`, `:token` (or `:api_key`), `:headers`, `:timeout`,
+  `:connect_timeout`, and `:transport`. A base URL already ending in `/v1` is
+  used as-is.
+  """
   @spec new(String.t(), keyword()) :: t()
   def new(base_url, opts \\ []) do
     token =
@@ -54,6 +62,9 @@ defmodule PaveDBClient.Client do
     }
   end
 
+  @doc """
+  Sends `body` as JSON and decodes the response envelope.
+  """
   @spec request_json(t(), atom(), String.t(), map()) ::
           {:ok, map()} | {:error, Error.t()}
   def request_json(%__MODULE__{} = client, method, path, body) do
@@ -66,12 +77,22 @@ defmodule PaveDBClient.Client do
     )
   end
 
+  @doc """
+  Sends a request with an empty body and decodes the response envelope.
+
+  Pass `root: true` for endpoints outside the `/v1` API, such as `/health`.
+  """
   @spec request(t(), atom(), String.t(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def request(%__MODULE__{} = client, method, path, opts \\ []) do
     request(client, method, path, "", opts)
   end
 
+  @doc """
+  Sends a request with `body` and decodes the response envelope.
+
+  Takes `:content_type` and `:root`.
+  """
   @spec request(t(), atom(), String.t(), iodata(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def request(%__MODULE__{} = client, method, path, body, opts) do

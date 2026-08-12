@@ -4,6 +4,10 @@
 defmodule PaveDBClient.Collection do
   @moduledoc """
   Tenant-scoped collection handle.
+
+  Every function here forwards to its `PaveDBClient` counterpart with the
+  tenant and collection the handle already carries. Build one with
+  `PaveDBClient.collection/3` or `PaveDBClient.create_collection/3`.
   """
 
   alias PaveDBClient.Client
@@ -17,6 +21,9 @@ defmodule PaveDBClient.Collection do
           name: String.t()
         }
 
+  @doc """
+  Adds one raw text document. Takes `:docid` and `:metadata`.
+  """
   @spec add(t(), String.t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def add(%__MODULE__{} = collection, text, opts \\ []) do
     PaveDBClient.add_text(
@@ -28,6 +35,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Adds one precomputed embedding. Takes `:docid` and `:metadata`.
+  """
   @spec add_vector(t(), list(number()), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def add_vector(%__MODULE__{} = collection, vector, opts \\ []) do
@@ -40,6 +50,12 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Adds several documents in one request.
+
+  The response reports per-document results, so a `{:ok, _}` can still carry
+  individual failures under `"documents"`.
+  """
   @spec add_many(t(), list()) :: {:ok, map()} | {:error, Error.t()}
   def add_many(%__MODULE__{} = collection, documents) do
     PaveDBClient.add_many(
@@ -50,6 +66,10 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Uploads a local file. Takes `:docid`, `:metadata`, `:content_type`, and
+  `:csv_options`.
+  """
   @spec ingest(t(), Path.t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def ingest(%__MODULE__{} = collection, path, opts \\ []) do
     PaveDBClient.ingest_file(
@@ -61,6 +81,12 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Searches by text and returns the full response envelope.
+
+  Takes `:k`, `:filters`, and `:include_common`. Use `matches/3` for the hits
+  alone.
+  """
   @spec search(t(), String.t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def search(%__MODULE__{} = collection, q, opts \\ []) do
     PaveDBClient.search(
@@ -72,6 +98,10 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Searches with a precomputed query vector. Takes the same options as
+  `search/3`.
+  """
   @spec search_vector(t(), list(number()), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def search_vector(%__MODULE__{} = collection, vector, opts \\ []) do
@@ -84,6 +114,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Lists logged searches, newest first. Takes `:limit` and `:offset`.
+  """
   @spec list_queries(t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def list_queries(%__MODULE__{} = collection, opts \\ []) do
     PaveDBClient.list_queries(
@@ -94,6 +127,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Fetches one logged search, including the result ids it returned.
+  """
   @spec get_query(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def get_query(%__MODULE__{} = collection, query_id) do
     PaveDBClient.get_query(
@@ -104,6 +140,11 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Replays one logged search against the collection's current data.
+
+  Compare the replayed ids with the stored ones to detect drift.
+  """
   @spec replay_query(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def replay_query(%__MODULE__{} = collection, query_id) do
     PaveDBClient.replay_query(
@@ -114,6 +155,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Searches and returns just the matches, skipping the response envelope.
+  """
   @spec matches(t(), String.t(), keyword()) ::
           {:ok, list(map())} | {:error, Error.t()}
   def matches(%__MODULE__{} = collection, q, opts \\ []) do
@@ -133,6 +177,9 @@ defmodule PaveDBClient.Collection do
     end
   end
 
+  @doc """
+  Lists the collection's documents.
+  """
   @spec list_documents(t()) :: {:ok, list(map())} | {:error, Error.t()}
   def list_documents(%__MODULE__{} = collection) do
     PaveDBClient.list_documents(
@@ -142,6 +189,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Fetches one document by id, with its metadata and chunk ids.
+  """
   @spec get(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def get(%__MODULE__{} = collection, docid) do
     PaveDBClient.get_document(
@@ -152,6 +202,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Deletes one document by id, along with its chunks.
+  """
   @spec delete(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def delete(%__MODULE__{} = collection, docid) do
     PaveDBClient.delete_document(
@@ -162,6 +215,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Fetches the collection's settings plus document and chunk counts.
+  """
   @spec detail(t()) :: {:ok, map()} | {:error, Error.t()}
   def detail(%__MODULE__{} = collection) do
     PaveDBClient.collection_detail(
@@ -171,6 +227,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Updates editable metadata. Takes `:display_name`.
+  """
   @spec update(t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def update(%__MODULE__{} = collection, opts \\ []) do
     PaveDBClient.update_collection(
@@ -181,6 +240,11 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Renames the collection and returns a handle pointing at the new slug.
+
+  The original handle still carries the old name, so keep the returned one.
+  """
   @spec rename(t(), String.t()) :: {:ok, t()} | {:error, Error.t()}
   def rename(%__MODULE__{} = collection, new_name) do
     case PaveDBClient.move_collection(
@@ -194,6 +258,9 @@ defmodule PaveDBClient.Collection do
     end
   end
 
+  @doc """
+  Lists the chunks a document was split into. Listings carry no chunk text.
+  """
   @spec list_chunks(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def list_chunks(%__MODULE__{} = collection, docid) do
     PaveDBClient.list_chunks(
@@ -204,6 +271,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Fetches one chunk's record by its rid.
+  """
   @spec get_chunk(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def get_chunk(%__MODULE__{} = collection, rid) do
     PaveDBClient.get_chunk(
@@ -214,6 +284,9 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @doc """
+  Fetches one chunk's raw text as `%{"content" => text, "content_type" => type}`.
+  """
   @spec get_chunk_content(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
   def get_chunk_content(%__MODULE__{} = collection, rid) do
     PaveDBClient.get_chunk_content(
