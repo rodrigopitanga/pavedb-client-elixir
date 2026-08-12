@@ -28,6 +28,18 @@ defmodule PaveDBClient.Collection do
     )
   end
 
+  @spec add_vector(t(), list(number()), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def add_vector(%__MODULE__{} = collection, vector, opts \\ []) do
+    PaveDBClient.add_vector(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      vector,
+      opts
+    )
+  end
+
   @spec add_many(t(), list()) :: {:ok, map()} | {:error, Error.t()}
   def add_many(%__MODULE__{} = collection, documents) do
     PaveDBClient.add_many(
@@ -56,6 +68,18 @@ defmodule PaveDBClient.Collection do
       collection.tenant,
       collection.name,
       q,
+      opts
+    )
+  end
+
+  @spec search_vector(t(), list(number()), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def search_vector(%__MODULE__{} = collection, vector, opts \\ []) do
+    PaveDBClient.search_vector(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      vector,
       opts
     )
   end

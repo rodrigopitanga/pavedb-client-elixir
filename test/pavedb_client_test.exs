@@ -243,6 +243,43 @@ defmodule PaveDBClientTest do
     assert {:ok, %{"status" => "degraded"}} = PaveDBClient.health(client)
   end
 
+  test "raw vectors ride PaveDB's vector and v fields" do
+    parent = self()
+
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn method, path, _headers, body ->
+          send(parent, {:request, method, path, body})
+          {:ok, 200, [], ~s({"ok":true,"matches":[]})}
+        end
+      )
+
+    books = PaveDBClient.collection(client, "books")
+
+    assert {:ok, _} =
+             PaveDBClient.Collection.add_vector(books, [0.1, 0.2], docid: "vec-1")
+
+    assert_received {:request, :post, "/v1/collections/default/books/documents", body}
+    assert {:ok, added} = PaveDBClient.JSON.decode(body)
+    assert added == %{"vector" => [0.1, 0.2], "docid" => "vec-1"}
+    refute Map.has_key?(added, "text")
+
+    assert {:ok, _} = PaveDBClient.Collection.search_vector(books, [0.1, 0.2], k: 3)
+
+    assert_received {:request, :post, "/v1/collections/default/books/search", body}
+    assert {:ok, searched} = PaveDBClient.JSON.decode(body)
+    assert searched == %{"v" => [0.1, 0.2], "k" => 3}
+    refute Map.has_key?(searched, "q")
+
+    assert {:ok, _} =
+             PaveDBClient.Collection.add_many(books, [%{vector: [0.3], docid: "vec-2"}])
+
+    assert_received {:request, :post, _path, body}
+    assert {:ok, %{"documents" => [item]}} = PaveDBClient.JSON.decode(body)
+    assert item == %{"vector" => [0.3], "docid" => "vec-2"}
+  end
+
   test "requests are bounded by a default timeout that callers can override" do
     assert %{timeout: 30_000, connect_timeout: 5_000} = PaveDBClient.connect()
 

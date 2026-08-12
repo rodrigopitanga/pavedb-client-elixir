@@ -96,12 +96,27 @@ defmodule PaveDBClient do
   @spec add_text(Client.t(), String.t(), String.t(), String.t(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def add_text(%Client{} = client, tenant, collection, text, opts \\ []) do
+    add_document(client, tenant, collection, %{"text" => text}, opts)
+  end
+
+  @doc """
+  Adds one precomputed embedding to a collection.
+
+  PaveDB takes either text or a raw vector, never both.
+  """
+  @spec add_vector(Client.t(), String.t(), String.t(), list(number()), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def add_vector(%Client{} = client, tenant, collection, vector, opts \\ []) do
+    add_document(client, tenant, collection, %{"vector" => vector}, opts)
+  end
+
+  defp add_document(client, tenant, collection, content, opts) do
     body =
-      %{
-        "text" => text,
+      content
+      |> Map.merge(%{
         "docid" => Keyword.get(opts, :docid),
         "metadata" => Keyword.get(opts, :metadata)
-      }
+      })
       |> strip_nil()
 
     Client.request_json(
@@ -115,8 +130,8 @@ defmodule PaveDBClient do
   @doc """
   Adds several raw text documents to a collection.
 
-  Each item may be a string, a map with `text`, `docid`, and `metadata`, or
-  `{text, docid, metadata}`.
+  Each item may be a string, a map with `text` or `vector` plus `docid` and
+  `metadata`, or `{text, docid, metadata}`.
   """
   @spec add_many(Client.t(), String.t(), String.t(), list()) ::
           {:ok, map()} | {:error, Error.t()}
@@ -166,13 +181,28 @@ defmodule PaveDBClient do
   @spec search(Client.t(), String.t(), String.t(), String.t(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def search(%Client{} = client, tenant, collection, q, opts \\ []) do
+    run_search(client, tenant, collection, %{"q" => q}, opts)
+  end
+
+  @doc """
+  Searches a collection with a precomputed query vector.
+
+  PaveDB takes either a text query or a raw vector, never both.
+  """
+  @spec search_vector(Client.t(), String.t(), String.t(), list(number()), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def search_vector(%Client{} = client, tenant, collection, vector, opts \\ []) do
+    run_search(client, tenant, collection, %{"v" => vector}, opts)
+  end
+
+  defp run_search(client, tenant, collection, query, opts) do
     body =
-      %{
-        "q" => q,
+      query
+      |> Map.merge(%{
         "k" => Keyword.get(opts, :k, 5),
         "filters" => Keyword.get(opts, :filters),
         "include_common" => Keyword.get(opts, :include_common)
-      }
+      })
       |> strip_nil()
 
     Client.request_json(
@@ -487,6 +517,7 @@ defmodule PaveDBClient do
     {:ok,
      %{
        "text" => Map.get(item, "text") || Map.get(item, :text),
+       "vector" => Map.get(item, "vector") || Map.get(item, :vector),
        "docid" => Map.get(item, "docid") || Map.get(item, :docid),
        "metadata" => Map.get(item, "metadata") || Map.get(item, :metadata)
      }

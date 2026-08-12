@@ -73,6 +73,18 @@ All request functions return `{:ok, value}` or
 `{:error, %PaveDBClient.Error{}}`. `PaveDBClient.format_error/1` formats
 errors for logs and operator messages.
 
+## Raw vectors
+
+Collections also take precomputed embeddings. PaveDB accepts either text or a
+raw vector on a given document or query, never both:
+
+```elixir
+{:ok, _} = PaveDBClient.Collection.add_vector(books, [0.12, 0.98], docid: "vec-1")
+{:ok, response} = PaveDBClient.Collection.search_vector(books, [0.12, 0.98], k: 3)
+```
+
+Batch items carry vectors too: `%{vector: [0.1, 0.2], docid: "vec-2"}`.
+
 ## Query replay
 
 Collection handles also expose PaveDB's query log:
