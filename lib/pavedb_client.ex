@@ -11,16 +11,19 @@ defmodule PaveDBClient do
   alias PaveDBClient.Error
 
   @default_url "http://localhost:8086"
+  @version Mix.Project.config()[:version]
 
   @doc """
   Returns the package version.
   """
-  def version do
-    "0.1.0"
-  end
+  @spec version() :: String.t()
+  def version, do: @version
 
   @doc """
   Builds a client for a running PaveDB HTTP server.
+
+  The base URL falls back to `PAVEDB_URL`, then to `#{@default_url}`. See
+  `PaveDBClient.Client.new/2` for the options.
   """
   @spec connect(String.t() | nil, keyword()) :: Client.t()
   def connect(base_url \\ nil, opts \\ [])
@@ -29,7 +32,7 @@ defmodule PaveDBClient do
     connect(nil, opts)
   end
 
-  def connect(base_url, opts) do
+  def connect(base_url, opts) when is_binary(base_url) or is_nil(base_url) do
     base_url = base_url || System.get_env("PAVEDB_URL", @default_url)
     Client.new(base_url, opts)
   end
@@ -38,13 +41,7 @@ defmodule PaveDBClient do
   Alias for `connect/2`.
   """
   @spec new(String.t() | nil, keyword()) :: Client.t()
-  def new(base_url \\ nil, opts \\ [])
-
-  def new(opts, []) when is_list(opts) do
-    connect(nil, opts)
-  end
-
-  def new(base_url, opts), do: connect(base_url, opts)
+  def new(base_url \\ nil, opts \\ []), do: connect(base_url, opts)
 
   @doc """
   Builds a tenant-scoped collection handle without making a request.
@@ -152,20 +149,26 @@ defmodule PaveDBClient do
   @spec ingest_file(Client.t(), String.t(), String.t(), Path.t(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def ingest_file(%Client{} = client, tenant, collection, path, opts \\ []) do
-    with {:ok, file} <- File.read(path) do
-      query = ingest_query(opts)
-      boundary = "pavedb-client-#{System.unique_integer([:positive])}"
+    with {:ok, file} <- read_file(path),
+         {:ok, metadata} <- encode_metadata(Keyword.get(opts, :metadata)) do
+      boundary = boundary()
       endpoint = "/collections/#{segment(tenant)}/#{segment(collection)}/documents"
-      content_type = "multipart/form-data; boundary=#{boundary}"
 
       Client.request(
         client,
         :post,
-        endpoint <> query,
-        multipart_body(boundary, multipart_parts(path, file, opts)),
-        content_type: content_type
+        endpoint <> ingest_query(opts),
+        multipart_body(boundary, multipart_parts(path, file, metadata, opts)),
+        content_type: "multipart/form-data; boundary=#{boundary}"
       )
-    else
+    end
+  end
+
+  defp read_file(path) do
+    case File.read(path) do
+      {:ok, file} ->
+        {:ok, file}
+
       {:error, reason} ->
         {:error,
          %Error{
@@ -173,6 +176,29 @@ defmodule PaveDBClient do
            message: "could not read #{path}: #{:file.format_error(reason)}"
          }}
     end
+  end
+
+  defp encode_metadata(nil), do: {:ok, nil}
+  defp encode_metadata(metadata) when is_binary(metadata), do: {:ok, metadata}
+
+  defp encode_metadata(metadata) do
+    case PaveDBClient.JSON.encode(metadata) do
+      {:ok, json} ->
+        {:ok, json}
+
+      {:error, _reason} ->
+        {:error,
+         %Error{
+           code: "invalid_metadata",
+           message: "metadata cannot be encoded as JSON"
+         }}
+    end
+  end
+
+  # Random, so a file that happens to contain the boundary cannot split the
+  # body early.
+  defp boundary do
+    "pavedb-client-" <> Base.url_encode64(:crypto.strong_rand_bytes(12), padding: false)
   end
 
   @doc """
@@ -605,9 +631,9 @@ defmodule PaveDBClient do
   defp present?(""), do: false
   defp present?(_value), do: true
 
-  defp multipart_parts(path, file, opts) do
+  defp multipart_parts(path, file, metadata, opts) do
     []
-    |> maybe_part("metadata", metadata_json(Keyword.get(opts, :metadata)))
+    |> maybe_part("metadata", metadata)
     |> maybe_part("docid", Keyword.get(opts, :docid))
     |> Kernel.++([
       %{
@@ -622,10 +648,6 @@ defmodule PaveDBClient do
   defp maybe_part(parts, _name, nil), do: parts
   defp maybe_part(parts, _name, ""), do: parts
   defp maybe_part(parts, name, body), do: parts ++ [%{name: name, body: body}]
-
-  defp metadata_json(nil), do: nil
-  defp metadata_json(metadata) when is_binary(metadata), do: metadata
-  defp metadata_json(metadata), do: PaveDBClient.JSON.encode!(metadata)
 
   defp multipart_body(boundary, parts) do
     body =
@@ -645,12 +667,15 @@ defmodule PaveDBClient do
 
   defp disposition(%{filename: filename, name: name}) do
     "Content-Disposition: form-data; name=\"#{name}\"; " <>
-      "filename=\"#{filename}\"\r\n"
+      "filename=\"#{header_safe(filename)}\"\r\n"
   end
 
   defp disposition(%{name: name}) do
     "Content-Disposition: form-data; name=\"#{name}\"\r\n"
   end
+
+  # Quotes and newlines in a filename would end the header early.
+  defp header_safe(value), do: String.replace(value, ~r/["\r\n]/, "")
 
   defp content_type_header(%{content_type: content_type}) do
     "Content-Type: #{content_type}\r\n"

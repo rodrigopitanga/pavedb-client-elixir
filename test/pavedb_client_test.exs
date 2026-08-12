@@ -4,8 +4,54 @@
 defmodule PaveDBClientTest do
   use ExUnit.Case, async: true
 
-  test "exposes a version" do
-    assert PaveDBClient.version() == "0.1.0"
+  test "exposes the version the package was built with" do
+    assert PaveDBClient.version() ==
+             :pavedb_client |> Application.spec(:vsn) |> to_string()
+  end
+
+  test "values PaveDB cannot receive fail as errors, not exceptions" do
+    client =
+      PaveDBClient.new("http://pave.test",
+        transport: fn _method, _path, _headers, _body ->
+          flunk("unencodable values must never reach the transport")
+        end
+      )
+
+    assert {:error, %{code: "invalid_body"}} =
+             PaveDBClient.Collection.add(PaveDBClient.collection(client, "books"), "hi",
+               metadata: %{"at" => ~U[2026-01-01 00:00:00Z]}
+             )
+
+    assert {:error, %{code: "invalid_body"}} =
+             PaveDBClient.search(client, "default", "books", "q", filters: %{"a" => {1, 2}})
+  end
+
+  test "an unencodable ingest metadata fails before the file is uploaded" do
+    path = Path.join(System.tmp_dir!(), "pavedb-client-#{unique_id()}.txt")
+    File.write!(path, "hello")
+    on_exit(fn -> File.rm(path) end)
+
+    client =
+      PaveDBClient.new("http://pave.test",
+        transport: fn _method, _path, _headers, _body ->
+          flunk("unencodable metadata must never reach the transport")
+        end
+      )
+
+    assert {:error, %{code: "invalid_metadata"}} =
+             PaveDBClient.ingest_file(client, "default", "books", path,
+               metadata: %{"at" => ~U[2026-01-01 00:00:00Z]}
+             )
+  end
+
+  test "a missing ingest file fails without a request" do
+    client =
+      PaveDBClient.new("http://pave.test",
+        transport: fn _m, _p, _h, _b -> flunk("must not request") end
+      )
+
+    assert {:error, %{code: "file_read_failed"}} =
+             PaveDBClient.ingest_file(client, "default", "books", "/nope/missing.csv")
   end
 
   test "collection surface maps to PaveDB HTTP requests" do

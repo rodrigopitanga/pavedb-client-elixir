@@ -6,17 +6,17 @@ defmodule PaveDBClient.JSON do
 
   @spec decode(binary()) :: {:ok, term()} | {:error, String.t()}
   def decode(binary) when is_binary(binary) do
-    case :json.decode(binary) do
-      value -> {:ok, value}
-    end
+    {:ok, :json.decode(binary)}
   rescue
     _ -> {:error, "invalid JSON"}
   end
 
-  @spec encode!(term()) :: binary()
-  def encode!(value) do
-    value
-    |> :json.encode()
-    |> IO.iodata_to_binary()
+  @spec encode(term()) :: {:ok, binary()} | {:error, String.t()}
+  def encode(value) do
+    {:ok, value |> :json.encode() |> IO.iodata_to_binary()}
+  rescue
+    # :json rejects tuples and structs, so a caller's metadata or filters can
+    # fail here rather than at the server.
+    _ -> {:error, "value cannot be encoded as JSON"}
   end
 end

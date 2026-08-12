@@ -68,13 +68,18 @@ defmodule PaveDBClient.Client do
   @spec request_json(t(), atom(), String.t(), map()) ::
           {:ok, map()} | {:error, Error.t()}
   def request_json(%__MODULE__{} = client, method, path, body) do
-    request(
-      client,
-      method,
-      path,
-      PaveDBClient.JSON.encode!(body),
-      content_type: "application/json"
-    )
+    case PaveDBClient.JSON.encode(body) do
+      {:ok, encoded} ->
+        request(client, method, path, encoded, content_type: "application/json")
+
+      {:error, _reason} ->
+        {:error,
+         %Error{
+           code: "invalid_body",
+           message: "request body cannot be encoded as JSON",
+           body: body
+         }}
+    end
   end
 
   @doc """
