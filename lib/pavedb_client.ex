@@ -406,16 +406,22 @@ defmodule PaveDBClient do
   @spec update_collection(Client.t(), String.t(), String.t(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
   def update_collection(%Client{} = client, tenant, name, opts \\ []) do
-    body =
-      %{"display_name" => Keyword.get(opts, :display_name)}
-      |> strip_nil()
+    case Keyword.get(opts, :display_name) do
+      nil ->
+        {:error,
+         %Error{
+           code: "invalid_update",
+           message: "update_collection needs a display_name"
+         }}
 
-    Client.request_json(
-      client,
-      :patch,
-      "/collections/#{segment(tenant)}/#{segment(name)}",
-      body
-    )
+      display_name ->
+        Client.request_json(
+          client,
+          :patch,
+          "/collections/#{segment(tenant)}/#{segment(name)}",
+          %{"display_name" => display_name}
+        )
+    end
   end
 
   @doc """

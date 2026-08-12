@@ -44,6 +44,16 @@ defmodule PaveDBClientTest do
              )
   end
 
+  test "an update with nothing to change fails without a request" do
+    client =
+      PaveDBClient.new("http://pave.test",
+        transport: fn _m, _p, _h, _b -> flunk("must not request") end
+      )
+
+    assert {:error, %{code: "invalid_update"}} =
+             PaveDBClient.update_collection(client, "default", "books")
+  end
+
   test "a missing ingest file fails without a request" do
     client =
       PaveDBClient.new("http://pave.test",
@@ -345,7 +355,6 @@ defmodule PaveDBClientTest do
 
     assert {:ok, %{"q" => "captain", "k" => 3, "filters" => %{"kind" => "note"}}} =
              PaveDBClient.JSON.decode(body)
-
   end
 
   test "requests are bounded by a default timeout that callers can override" do
