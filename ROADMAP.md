@@ -10,10 +10,9 @@ or function names ahead of implementation.
 
 ## PaveDB 1.0
 
-- P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
-  Hex tarball: GNU Make/Bash admission and guarded `hex-publish`; a final
-  `v<version>` tag must match `mix.exs`, pass the tarball check, and publish
-  with protected `HEX_API_KEY`. The pipeline is in place; no tag is cut yet.
+- ~~P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
+  Hex tarball~~: CI generates one `docs/reference/api.md`, verifies the package
+  copy byte-for-byte, and publishes final tags with protected `HEX_API_KEY`.
 - Guard the `/v1` contract against drift. Nothing here checks the client's
   routes and payload fields against the server's `openapi.json`, which is how
   the error decoder came to target an envelope PaveDB never sends.

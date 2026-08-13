@@ -5,6 +5,7 @@
 #
 # Basic usage:
 #   make docs                    # generate the markdown API reference
+#   make docs-check              # verify the generated reference contract
 #   make changelog               # preview the next changelog entry
 #   make release                 # changelog + tarball, ready to tag
 #
@@ -35,7 +36,7 @@ APP             := pavedb_client
 VERSION         := $(shell sed -n 's/.*version: "\([^"]*\)".*/\1/p' mix.exs)
 
 MIX             ?= mix
-DOCS_DIR        ?= docs/reference
+DOCS_DIR        := docs/reference
 DIST_DIR        ?= dist
 CHANGELOG       ?= CHANGELOG.md
 RELEASE_REMOTE  ?= gitlab
@@ -48,6 +49,7 @@ help:
 	echo; \
 	echo "  test                   Run the checks the CI test job runs"; \
 	echo "  docs                   Generate the markdown API reference"; \
+	echo "  docs-check             Verify the generated reference contract"; \
 	echo "  bump                   Set the version in mix.exs (VERSION=x.y.z)"; \
 	echo "  changelog              Preview the $(VERSION) entry (no write)"; \
 	echo "  changelog-write        Prepend the $(VERSION) entry to $(CHANGELOG)"; \
@@ -67,7 +69,19 @@ test:
 # -------- docs --------
 .PHONY: docs
 docs:
-	$(MIX) docs --formatter markdown --output $(DOCS_DIR)
+	tmp="$$(mktemp -d)"; \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	$(MIX) docs --formatter markdown --warnings-as-errors --output "$$tmp"; \
+	rm -rf $(DOCS_DIR); \
+	mkdir -p $(DOCS_DIR); \
+	sed '/^\*Consult \[api-reference\.md\]/d' \
+		"$$tmp/PaveDBClient.md" "$$tmp"/PaveDBClient.*.md \
+		> $(DOCS_DIR)/api.md
+
+.PHONY: docs-check
+docs-check: docs
+	test -s $(DOCS_DIR)/api.md
+	test "$$(find $(DOCS_DIR) -type f -name '*.md' | wc -l | tr -d ' ')" = 1
 
 # -------- bump --------
 .PHONY: bump
@@ -95,7 +109,7 @@ release-tag-check:
 	test "$(CI_COMMIT_TAG)" = "v$(VERSION)"
 
 .PHONY: release-tarball
-release-tarball: docs
+release-tarball: docs-check
 	mkdir -p $(DIST_DIR)
 	$(MIX) hex.build --output $(TARBALL)
 
@@ -104,7 +118,10 @@ release-tarball-check: release-tarball
 	test -f $(TARBALL)
 	rm -rf $(DIST_DIR)/unpacked
 	$(MIX) hex.build --unpack --output $(DIST_DIR)/unpacked
-	test -f $(DIST_DIR)/unpacked/$(DOCS_DIR)/api-reference.md
+	test -f $(DIST_DIR)/unpacked/$(DOCS_DIR)/api.md
+	test "$$(find $(DIST_DIR)/unpacked/$(DOCS_DIR) -type f -name '*.md' \
+		| wc -l | tr -d ' ')" = 1
+	cmp $(DOCS_DIR)/api.md $(DIST_DIR)/unpacked/$(DOCS_DIR)/api.md
 
 .PHONY: release
 release:

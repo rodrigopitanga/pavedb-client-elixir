@@ -68,7 +68,7 @@ docs-tarball:
   artifacts:
     paths:
       - dist/*.tar
-      - docs/reference/
+      - docs/reference/api.md
     expire_in: never
   <<: *stable-tag
 
