@@ -5,6 +5,7 @@ stages:
   - mirror
   - test
   - release
+  - announce
 
 .stable-tag: &stable-tag
   rules:
@@ -84,4 +85,76 @@ publish-hex:
     - mix deps.get
     - test -n "${HEX_API_KEY:-}" || { echo "HEX_API_KEY is missing"; exit 1; }
     - mix hex.publish --yes
+  <<: *stable-tag
+
+release-notes:
+  image: alpine:3.20
+  stage: release
+  script:
+    - |
+      version="${CI_COMMIT_TAG#v}"
+      pattern="$(printf '%s' "$version" | sed 's/[].[^$*\\]/\\&/g')"
+      awk -v pattern="$pattern" '
+        $0 ~ "^## " pattern "([ \t]|$)" { found = 1; next }
+        found && /^## / { exit }
+        found && /^---$/ { exit }
+        found && !started && NF { started = 1 }
+        found && started { print }
+        END { if (!found || !started) exit 1 }
+      ' CHANGELOG.md > release-notes.md
+      test -s release-notes.md
+      printf 'PaveDB Elixir Client %s\n' "$version" > release-title.txt
+  artifacts:
+    paths:
+      - release-notes.md
+      - release-title.txt
+  <<: *stable-tag
+
+announce-gitlab:
+  image: registry.gitlab.com/gitlab-org/cli:latest
+  stage: announce
+  variables:
+    GLAB_ENABLE_CI_AUTOLOGIN: "true"
+  needs:
+    - job: publish-hex
+    - job: release-notes
+      artifacts: true
+  script:
+    - |
+      glab release create "$CI_COMMIT_TAG" --name "$(cat release-title.txt)" \
+        --notes-file release-notes.md --ref "$CI_COMMIT_SHA"
+  <<: *stable-tag
+
+announce-github:
+  image: alpine:3.20
+  stage: announce
+  needs:
+    - job: mirror-github
+    - job: publish-hex
+    - job: release-notes
+      artifacts: true
+  before_script:
+    - apk add --no-cache git github-cli
+  script:
+    - |
+      test -n "${GITHUB_MIRROR_TOKEN:-}" || {
+        echo "GITHUB_MIRROR_TOKEN is missing"
+        exit 1
+      }
+      export GH_TOKEN="$GITHUB_MIRROR_TOKEN"
+    - |
+      git ls-remote --exit-code \
+        "https://github.com/rodrigopitanga/pavedb-client-elixir.git" \
+        "refs/tags/${CI_COMMIT_TAG}"
+    - |
+      if gh release view "$CI_COMMIT_TAG" \
+        --repo rodrigopitanga/pavedb-client-elixir >/dev/null 2>&1; then
+        gh release edit "$CI_COMMIT_TAG" \
+          --repo rodrigopitanga/pavedb-client-elixir \
+          --title "$(cat release-title.txt)" --notes-file release-notes.md
+      else
+        gh release create "$CI_COMMIT_TAG" \
+          --repo rodrigopitanga/pavedb-client-elixir --verify-tag \
+          --title "$(cat release-title.txt)" --notes-file release-notes.md
+      fi
   <<: *stable-tag
