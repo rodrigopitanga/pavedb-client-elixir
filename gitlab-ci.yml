@@ -46,7 +46,7 @@ elixir:
   image: elixir:1.17-otp-27-alpine
   stage: test
   before_script:
-    - apk add --no-cache make
+    - apk add --no-cache bash make
     - mix local.hex --force
   script:
     - mix deps.get
@@ -59,7 +59,7 @@ docs-tarball:
   image: elixir:1.17-otp-27-alpine
   stage: test
   before_script:
-    - apk add --no-cache make
+    - apk add --no-cache bash make
     - mix local.hex --force
   script:
     - mix deps.get
