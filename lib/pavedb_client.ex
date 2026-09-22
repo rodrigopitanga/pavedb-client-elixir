@@ -111,7 +111,6 @@ defmodule PaveDBClient do
     body =
       content
       |> Map.merge(%{
-        "embedder" => Keyword.get(opts, :embedder),
         "docid" => Keyword.get(opts, :docid),
         "metadata" => Keyword.get(opts, :metadata)
       })
@@ -250,8 +249,7 @@ defmodule PaveDBClient do
       |> Map.merge(%{
         "k" => Keyword.get(opts, :k, 5),
         "filters" => Keyword.get(opts, :filters),
-        "include_common" => Keyword.get(opts, :include_common),
-        "embedder" => Keyword.get(opts, :embedder)
+        "include_common" => Keyword.get(opts, :include_common)
       })
       |> strip_nil()
 
@@ -643,7 +641,6 @@ defmodule PaveDBClient do
     []
     |> maybe_part("metadata", metadata)
     |> maybe_part("docid", Keyword.get(opts, :docid))
-    |> maybe_part("embedder", Keyword.get(opts, :embedder))
     |> Kernel.++([
       %{
         name: "file",

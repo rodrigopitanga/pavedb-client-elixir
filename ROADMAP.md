@@ -10,6 +10,12 @@ or function names ahead of implementation.
 
 ## PaveDB 1.0
 
+- P1-54 dependency — collection archive parity after the core contract is
+  fixed: binary export/import, typed failures, admin authorization, and
+  generated usage references. Demonstrate a same-version round trip against
+  a real core while preserving unrelated collections. Keep instance archives
+  distinct; do not invent method names before the core API is defined.
+
 - ~~P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
   Hex tarball~~: CI generates one `docs/reference/api.md`, verifies the package
   copy byte-for-byte, and publishes final tags with protected `HEX_API_KEY`.
