@@ -471,4 +471,54 @@ defmodule PaveDBClientTest do
   defp unique_id do
     System.unique_integer([:positive, :monotonic])
   end
+  test "search and ingest carry the per-operation embedder selector" do
+    parent = self()
+
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn method, path, _headers, body ->
+          send(parent, {:request, method, path, body})
+          {:ok, 200, [], ~s({"ok":true,"matches":[],"query_id":null})}
+        end
+      )
+
+    assert {:ok, _} =
+             PaveDBClient.search(client, "acme", "notes", "captain",
+               k: 2,
+               embedder: "bgetei-gpu"
+             )
+
+    assert_received {:request, :post, "/v1/collections/acme/notes/search", body}
+    assert {:ok, %{"embedder" => "bgetei-gpu"}} = PaveDBClient.JSON.decode(body)
+
+    assert {:ok, _} =
+             PaveDBClient.add_text(client, "acme", "notes", "hello",
+               docid: "d1",
+               embedder: "bgetei-gpu"
+             )
+
+    assert_received {:request, :post, "/v1/collections/acme/notes/documents", doc_body}
+    assert {:ok, %{"embedder" => "bgetei-gpu", "docid" => "d1"}} =
+             PaveDBClient.JSON.decode(doc_body)
+  end
+
+  test "the embedder selector is omitted when not given" do
+    parent = self()
+
+    client =
+      PaveDBClient.new(
+        "http://pave.test",
+        transport: fn _method, _path, _headers, body ->
+          send(parent, {:request, body})
+          {:ok, 200, [], ~s({"ok":true,"matches":[],"query_id":null})}
+        end
+      )
+
+    assert {:ok, _} = PaveDBClient.search(client, "acme", "notes", "captain", k: 2)
+    assert_received {:request, body}
+    assert {:ok, decoded} = PaveDBClient.JSON.decode(body)
+    refute Map.has_key?(decoded, "embedder")
+  end
+
 end
