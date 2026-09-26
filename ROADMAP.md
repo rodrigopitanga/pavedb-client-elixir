@@ -16,6 +16,12 @@ or function names ahead of implementation.
   a real core while preserving unrelated collections. Keep instance archives
   distinct; do not invent method names before the core API is defined.
 
+- P1-77/P1-78/P2-11 dependency — send `search_mode`, `chunking` and
+  `priority_key` on collection create.
+- P1-77/P1-70 dependency — send `mode` and `content_filter` on collection and
+  shared search.
+- P1-55 dependency — self-service collection reindex: start, status, cancel.
+
 - ~~P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
   Hex tarball~~: CI generates one `docs/reference/api.md`, verifies the package
   copy byte-for-byte, and publishes final tags with protected `HEX_API_KEY`.
