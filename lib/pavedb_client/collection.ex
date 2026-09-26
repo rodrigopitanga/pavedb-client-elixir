@@ -84,8 +84,8 @@ defmodule PaveDBClient.Collection do
   @doc """
   Searches by text and returns the full response envelope.
 
-  Takes `:k`, `:filters`, and `:include_common`. Use `matches/3` for the hits
-  alone.
+  Takes `:k`, `:filters`, `:content_filter`, `:mode`, and `:include_common`.
+  Use `matches/3` for the hits alone.
   """
   @spec search(t(), String.t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
   def search(%__MODULE__{} = collection, q, opts \\ []) do
@@ -256,6 +256,75 @@ defmodule PaveDBClient.Collection do
       {:ok, _response} -> {:ok, %{collection | name: new_name}}
       {:error, error} -> {:error, error}
     end
+  end
+
+  @doc """
+  Downloads this collection as a binary zip archive.
+  """
+  @spec export_archive(t()) :: {:ok, binary()} | {:error, Error.t()}
+  def export_archive(%__MODULE__{} = collection) do
+    PaveDBClient.export_collection_archive(
+      collection.client,
+      collection.tenant,
+      collection.name
+    )
+  end
+
+  @doc """
+  Restores a binary zip archive into this collection's name.
+
+  Creates a new collection by default; pass `replace: true` to replace one.
+  """
+  @spec restore_archive(t(), binary(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def restore_archive(%__MODULE__{} = collection, archive, opts \\ []) do
+    PaveDBClient.restore_collection_archive(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      archive,
+      opts
+    )
+  end
+
+  @doc """
+  Starts a resumable reindex. Takes `:embedder_type`, `:embed_model`, and
+  `:embedder_config`.
+  """
+  @spec start_reindex(t(), keyword()) :: {:ok, map()} | {:error, Error.t()}
+  def start_reindex(%__MODULE__{} = collection, opts \\ []) do
+    PaveDBClient.start_reindex(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      opts
+    )
+  end
+
+  @doc """
+  Fetches a reindex job's status.
+  """
+  @spec get_reindex(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def get_reindex(%__MODULE__{} = collection, job_id) do
+    PaveDBClient.get_reindex(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      job_id
+    )
+  end
+
+  @doc """
+  Cancels a reindex job.
+  """
+  @spec cancel_reindex(t(), String.t()) :: {:ok, map()} | {:error, Error.t()}
+  def cancel_reindex(%__MODULE__{} = collection, job_id) do
+    PaveDBClient.cancel_reindex(
+      collection.client,
+      collection.tenant,
+      collection.name,
+      job_id
+    )
   end
 
   @doc """

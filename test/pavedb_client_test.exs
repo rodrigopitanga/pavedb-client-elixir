@@ -468,6 +468,125 @@ defmodule PaveDBClientTest do
              PaveDBClient.Collection.get_chunk_content(books, "c0")
   end
 
+  test "PaveDB 0.9.7 collection, search, and inventory fields reach the wire" do
+    parent = self()
+
+    client =
+      PaveDBClient.new("http://pave.test",
+        tenant: "acme",
+        transport: fn method, path, _headers, body ->
+          send(parent, {:request, method, path, body})
+
+          if path == "/v1/embedders/acme" do
+            inventory = ~s({"ok":true,"tenant":"acme","embedders":[{"key":"native"}]})
+            {:ok, 200, [], inventory}
+          else
+            {:ok, 200, [], ~s({"ok":true,"matches":[]})}
+          end
+        end
+      )
+
+    assert {:ok, books} =
+             PaveDBClient.create_collection(client, "books",
+               embedder: "native",
+               search_mode: "hybrid",
+               chunking: %{strategy: "fixed", size: 1000, overlap: 200},
+               priority_key: "prio_boost"
+             )
+
+    assert_received {:request, :post, "/v1/collections/acme/books", body}
+    assert {:ok, create} = PaveDBClient.JSON.decode(body)
+
+    assert create == %{
+             "embedder" => "native",
+             "search_mode" => "hybrid",
+             "chunking" => %{"strategy" => "fixed", "size" => 1000, "overlap" => 200},
+             "priority_key" => "prio_boost"
+           }
+
+    assert {:ok, %{"tenant" => "acme", "embedders" => [%{"key" => "native"}]}} =
+             PaveDBClient.list_embedders(client)
+
+    assert_received {:request, :get, "/v1/embedders/acme", ""}
+
+    filter = %{op: "phrase", value: "captain nemo"}
+
+    assert {:ok, _} =
+             PaveDBClient.Collection.search(books, "captain",
+               mode: "hybrid",
+               content_filter: filter
+             )
+
+    assert_received {:request, :post, "/v1/collections/acme/books/search", body}
+    assert {:ok, search} = PaveDBClient.JSON.decode(body)
+    assert search["mode"] == "hybrid"
+    assert search["content_filter"] == %{"op" => "phrase", "value" => "captain nemo"}
+
+    assert {:ok, _} =
+             PaveDBClient.search_shared(client, "captain",
+               mode: "boost",
+               content_filter: filter
+             )
+
+    assert_received {:request, :post, "/v1/search", body}
+    assert {:ok, shared} = PaveDBClient.JSON.decode(body)
+    assert shared["mode"] == "boost"
+    assert shared["content_filter"] == search["content_filter"]
+  end
+
+  test "collection archive and reindex use tenant-scoped PaveDB 0.9.7 routes" do
+    parent = self()
+    archive = <<80, 75, 3, 4, 0, 255>>
+
+    client =
+      PaveDBClient.new("http://pave.test",
+        transport: fn method, path, headers, body ->
+          send(parent, {:request, method, path, headers, body})
+
+          case {method, path} do
+            {:get, "/v1/collections/default/books/archive"} ->
+              {:ok, 200, [{"content-type", "application/zip"}], archive}
+
+            _ ->
+              {:ok, 200, [], ~s({"ok":true,"job_id":"job-1"})}
+          end
+        end
+      )
+
+    books = PaveDBClient.collection(client, "books")
+    assert {:ok, ^archive} = PaveDBClient.Collection.export_archive(books)
+    assert_received {:request, :get, "/v1/collections/default/books/archive", _, ""}
+
+    for {opts, method} <- [{[], :post}, {[replace: true], :put}] do
+      assert {:ok, _} = PaveDBClient.Collection.restore_archive(books, archive, opts)
+
+      assert_received {:request, ^method, "/v1/collections/default/books/archive", _headers, body}
+
+      assert body =~ ~s(name="file"; filename="collection.zip")
+      assert :binary.match(body, archive) != :nomatch
+    end
+
+    assert {:ok, %{"job_id" => "job-1"}} =
+             PaveDBClient.Collection.start_reindex(books,
+               embed_model: "new-model",
+               embedder_config: %{"dim" => 384}
+             )
+
+    assert_received {:request, :post, "/v1/collections/default/books/reindex", _, body}
+    assert {:ok, reindex} = PaveDBClient.JSON.decode(body)
+
+    assert reindex == %{
+             "embed_model" => "new-model",
+             "embedder_config" => %{"dim" => 384}
+           }
+
+    assert {:ok, _} = PaveDBClient.Collection.get_reindex(books, "job-1")
+    assert_received {:request, :get, "/v1/collections/default/books/reindex/job-1", _, ""}
+
+    assert {:ok, _} = PaveDBClient.Collection.cancel_reindex(books, "job-1")
+    assert_received {:request, :delete, "/v1/collections/default/books/reindex/job-1", _, ""}
+  end
+
   defp unique_id do
     System.unique_integer([:positive, :monotonic])
   end

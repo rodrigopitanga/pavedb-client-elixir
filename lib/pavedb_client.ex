@@ -54,6 +54,10 @@ defmodule PaveDBClient do
 
   @doc """
   Creates a collection and returns a collection handle.
+
+  Options include `:display_name`, `:embedder`, `:embedder_type`,
+  `:embed_model`, `:embedder_config`, `:search_mode`, `:chunking`, and
+  `:priority_key`.
   """
   @spec create_collection(Client.t(), String.t(), keyword()) ::
           {:ok, Collection.t()} | {:error, Error.t()}
@@ -68,7 +72,8 @@ defmodule PaveDBClient do
   end
 
   @doc """
-  Creates or configures a tenant collection.
+  Creates or configures a tenant collection with the same settings as
+  `create_collection/3`.
   """
   @spec create_collection(Client.t(), String.t(), String.t(), map() | keyword()) ::
           {:ok, map()} | {:error, Error.t()}
@@ -224,10 +229,9 @@ defmodule PaveDBClient do
   @doc """
   Searches the one collection PaveDB is configured to share across tenants.
 
-  Takes `:k` and `:filters`. The endpoint needs no tenant or collection, and
-  answers with an empty match list when the server has no shared scope
-  enabled. There is no raw-vector form: the server drops `v` on this
-  endpoint, so only text queries reach it.
+  Takes `:k`, `:filters`, `:content_filter`, and `:mode`. The endpoint needs no
+  tenant or collection, and answers with an empty match list when the server
+  has no shared scope enabled. It accepts only text queries.
   """
   @spec search_shared(Client.t(), String.t(), keyword()) ::
           {:ok, map()} | {:error, Error.t()}
@@ -236,7 +240,9 @@ defmodule PaveDBClient do
       %{
         "q" => q,
         "k" => Keyword.get(opts, :k, 5),
-        "filters" => Keyword.get(opts, :filters)
+        "filters" => Keyword.get(opts, :filters),
+        "content_filter" => Keyword.get(opts, :content_filter),
+        "mode" => Keyword.get(opts, :mode)
       }
       |> strip_nil()
 
@@ -249,7 +255,9 @@ defmodule PaveDBClient do
       |> Map.merge(%{
         "k" => Keyword.get(opts, :k, 5),
         "filters" => Keyword.get(opts, :filters),
-        "include_common" => Keyword.get(opts, :include_common)
+        "include_common" => Keyword.get(opts, :include_common),
+        "content_filter" => Keyword.get(opts, :content_filter),
+        "mode" => Keyword.get(opts, :mode)
       })
       |> strip_nil()
 
@@ -388,6 +396,19 @@ defmodule PaveDBClient do
   end
 
   @doc """
+  Lists configured embedder instances available to a tenant.
+
+  Uses the client's tenant unless `:tenant` is supplied. This is the
+  tenant-visible inventory, so it works with a tenant key.
+  """
+  @spec list_embedders(Client.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def list_embedders(%Client{} = client, opts \\ []) do
+    tenant = Keyword.get(opts, :tenant, client.tenant)
+    Client.request(client, :get, "/embedders/#{segment(tenant)}")
+  end
+
+  @doc """
   Fetches a collection's settings plus document and chunk counts.
   """
   @spec collection_detail(Client.t(), String.t(), String.t()) ::
@@ -448,6 +469,96 @@ defmodule PaveDBClient do
       client,
       :delete,
       "/collections/#{segment(tenant)}/#{segment(name)}"
+    )
+  end
+
+  @doc """
+  Downloads a collection archive as a binary zip.
+
+  PaveDB restores collection archives only on the same server version.
+  """
+  @spec export_collection_archive(Client.t(), String.t(), String.t()) ::
+          {:ok, binary()} | {:error, Error.t()}
+  def export_collection_archive(%Client{} = client, tenant, name) do
+    case Client.request_raw(
+           client,
+           :get,
+           "/collections/#{segment(tenant)}/#{segment(name)}/archive"
+         ) do
+      {:ok, %{body: archive}} -> {:ok, archive}
+      {:error, error} -> {:error, error}
+    end
+  end
+
+  @doc """
+  Restores a binary collection archive. Creates a new collection by default;
+  pass `replace: true` to replace an existing collection.
+  """
+  @spec restore_collection_archive(Client.t(), String.t(), String.t(), binary(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def restore_collection_archive(%Client{} = client, tenant, name, archive, opts \\ [])
+      when is_binary(archive) do
+    boundary = boundary()
+    method = if Keyword.get(opts, :replace, false), do: :put, else: :post
+
+    part = %{
+      name: "file",
+      filename: "collection.zip",
+      content_type: "application/zip",
+      body: archive
+    }
+
+    Client.request(
+      client,
+      method,
+      "/collections/#{segment(tenant)}/#{segment(name)}/archive",
+      multipart_body(boundary, [part]),
+      content_type: "multipart/form-data; boundary=#{boundary}"
+    )
+  end
+
+  @doc """
+  Starts a resumable reindex into a new vector space.
+
+  Takes `:embedder_type`, `:embed_model`, and `:embedder_config`. The server
+  chooses the embedder instance for this operation.
+  """
+  @spec start_reindex(Client.t(), String.t(), String.t(), keyword()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def start_reindex(%Client{} = client, tenant, name, opts \\ []) do
+    body = opts |> Keyword.take([:embedder_type, :embed_model, :embedder_config])
+
+    Client.request_json(
+      client,
+      :post,
+      "/collections/#{segment(tenant)}/#{segment(name)}/reindex",
+      Enum.into(body, %{})
+    )
+  end
+
+  @doc """
+  Fetches a collection reindex job's status.
+  """
+  @spec get_reindex(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def get_reindex(%Client{} = client, tenant, name, job_id) do
+    Client.request(
+      client,
+      :get,
+      "/collections/#{segment(tenant)}/#{segment(name)}/reindex/#{segment(job_id)}"
+    )
+  end
+
+  @doc """
+  Cancels a collection reindex job.
+  """
+  @spec cancel_reindex(Client.t(), String.t(), String.t(), String.t()) ::
+          {:ok, map()} | {:error, Error.t()}
+  def cancel_reindex(%Client{} = client, tenant, name, job_id) do
+    Client.request(
+      client,
+      :delete,
+      "/collections/#{segment(tenant)}/#{segment(name)}/reindex/#{segment(job_id)}"
     )
   end
 
@@ -533,13 +644,21 @@ defmodule PaveDBClient do
   defp collection_attr_keys do
     [
       :display_name,
+      :embedder,
       :embedder_type,
       :embed_model,
       :embedder_config,
+      :search_mode,
+      :chunking,
+      :priority_key,
       "display_name",
+      "embedder",
       "embedder_type",
       "embed_model",
-      "embedder_config"
+      "embedder_config",
+      "search_mode",
+      "chunking",
+      "priority_key"
     ]
   end
 

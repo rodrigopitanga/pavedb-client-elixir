@@ -10,17 +10,12 @@ or function names ahead of implementation.
 
 ## PaveDB 1.0
 
-- P1-54 dependency — collection archive parity after the core contract is
-  fixed: binary export/import, typed failures, admin authorization, and
-  generated usage references. Demonstrate a same-version round trip against
-  a real core while preserving unrelated collections. Keep instance archives
-  distinct; do not invent method names before the core API is defined.
-
-- P1-77/P1-78/P2-11 dependency — send `search_mode`, `chunking` and
-  `priority_key` on collection create.
-- P1-77/P1-70 dependency — send `mode` and `content_filter` on collection and
-  shared search.
-- P1-55 dependency — self-service collection reindex: start, status, cancel.
+- ~~P1-54 dependency — binary collection archive export/import~~: demonstrate
+  a same-version round trip against a real PaveDB while preserving unrelated
+  collections.
+- ~~P1-77/P1-78/P2-11 dependency — collection creation settings~~.
+- ~~P1-77/P1-70 dependency — search mode and content filters~~.
+- ~~P1-55 dependency — self-service reindex start, status, and cancel~~.
 
 - ~~P1-69 — Publish generated Elixir API docs for pavedb-site from a versioned
   Hex tarball~~: CI generates one `docs/reference/api.md`, verifies the package

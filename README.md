@@ -95,7 +95,63 @@ server has no shared scope enabled:
 {:ok, %{"matches" => matches}} = PaveDBClient.search_shared(client, "captain", k: 3)
 ```
 
-Text only — PaveDB's shared endpoint ignores raw query vectors.
+Text only — PaveDB's shared endpoint rejects raw query vectors.
+
+## PaveDB 0.9.7 collection options
+
+The client sends PaveDB's collection creation settings, including an embedder
+selector, default search mode, chunking, and priority field:
+
+```elixir
+{:ok, books} =
+  PaveDBClient.create_collection(client, "books",
+    embedder: "native",
+    search_mode: "boost",
+    chunking: %{strategy: "fixed", size: 800, overlap: 100},
+    priority_key: "rank"
+  )
+
+{:ok, %{"matches" => matches, "mode" => "hybrid"}} =
+  PaveDBClient.Collection.search(books, "captain nemo",
+    mode: "hybrid",
+    content_filter: %{op: "phrase", value: "captain nemo"}
+  )
+```
+
+`search_shared/3` takes the same `:mode` and `:content_filter` options.
+`"native"` is the default configured instance used in PaveDB's core examples.
+Collection creation accepts another `:embedder` selector if the server has it
+configured. PaveDB chooses the instance for each operation; the client has no
+per-operation embedder option.
+
+Tenant keys can inspect their available embedder instances:
+
+```elixir
+{:ok, %{"embedders" => embedders, "default" => default}} =
+  PaveDBClient.list_embedders(client)
+```
+
+## Collection portability
+
+Collection archives are binary zip files and restore only on a PaveDB server
+of the same version. `restore_archive/3` creates a new collection by default;
+`replace: true` replaces an existing one.
+
+```elixir
+{:ok, archive} = PaveDBClient.Collection.export_archive(books)
+copy = PaveDBClient.collection(client, "books-copy")
+{:ok, _} = PaveDBClient.Collection.restore_archive(copy, archive)
+
+{:ok, %{"job_id" => job_id}} =
+  PaveDBClient.Collection.start_reindex(copy,
+    embedder_type: "sbert",
+    embed_model: "all-MiniLM-L6-v2"
+  )
+{:ok, job} = PaveDBClient.Collection.get_reindex(copy, job_id)
+```
+
+The target reindex model must be configured on the server. Use
+`PaveDBClient.Collection.cancel_reindex(copy, job_id)` to cancel a job.
 
 ## Query replay
 
@@ -134,7 +190,7 @@ root `/health` connection check:
 {:ok, _} = PaveDBClient.delete_collection(client, "tenant", "tomes")
 ```
 
-`/admin`, `/metrics`, and `/embedders` are intentionally out of scope.
+`/admin` and `/metrics` are intentionally out of scope.
 
 ## Development
 
