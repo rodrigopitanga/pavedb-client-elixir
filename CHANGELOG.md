@@ -1,6 +1,18 @@
 <!-- (C) 2026 Rodrigo Rodrigues da Silva <rodrigo@flowlexi.com> -->
 <!-- SPDX-License-Identifier: Apache-2.0 -->
 
+## 0.2.0 — 2026-09-26
+
+### SDK
+- Cover PaveDB 0.9.7 collection settings, search modes, and content filters
+- Add tenant embedder inventory, collection archive, and reindex operations
+- Keep embedder instance selection on the server, not per client operation
+
+### Release
+- Retire the mistaken 0.1.1 release after publishing 0.2.0
+
+---
+
 ## 0.1.0 — 2026-08-12
 
 ### SDK
